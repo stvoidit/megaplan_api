@@ -1,3 +1,5 @@
+# v-2.01
+
 import requests
 import hashlib
 import hmac
@@ -5,14 +7,21 @@ import base64
 from email.utils import formatdate
 from urllib.parse import urlencode
 import time
+import datetime
 
 
 class Megaplan_Auth:
     """
-    Получение ключей
-    MP = Megaplan_Auth('login', 'password', 'host')
-    s_key = MP.secretkey
-    a_key = MP.accessid
+    api = Megaplan_Auth(login, password, host).get_key()
+
+    login - Логин пользователя в системе Мегаплан\n
+    password - Пароль пользователя от системы Мегаплан\n
+    host - Домен вашего Мегаплан (без http*)\n
+    __proto - По умолчанию HTTPS\n
+    ----
+    __password_crypt() - Шифрует пароль в md5\n
+    __get_otk() - Получения OneTimeKey для получения следующих ключей\n
+    get_key() - Возвращает кортеж из (str: AccessId, bytes: SecretKey)
     """
     __slots__ = ['login', 'password', 'host',
                  '__proto', 'accessid', 'secretkey']
@@ -40,23 +49,16 @@ class Megaplan_Auth:
 
 
 class Megaplan_Api:
-    """ 
-    Документация: https://dev.megaplan.ru/r1905/api/index.html
-     """
     __slots__ = ['_HOST', '_HOST_full', '_today',
                  'AccessId', 'SecretKey', 'host', 'proto', 'domain']
 
-    def __init__(self, AccessId=None, SecretKey=None, host=None, proto='https://'):
-        self.host = host
+    def __init__(self, AccessId, SecretKey, host, proto='https://'):
+        self.host = host  # Хост
         self.proto = proto
-        self.domain = self.proto + self.host
+        self.domain = self.proto + self.host  # протокол + хост
         self._today = formatdate(time.time())  # дата в стандарте RFC-2822
-        if not AccessId and not SecretKey:
-            self.AccessId, self.SecretKey = Megaplan_Auth(
-                'LOGIN', 'PASSWORD', self.host).get_key()
-        else:
-            self.AccessId = AccessId
-            self.SecretKey = SecretKey
+        self.AccessId = AccessId
+        self.SecretKey = SecretKey
 
     def query_hasher(self, request_type, uri, payload=None):
         if request_type == 'GET':
@@ -65,10 +67,10 @@ class Megaplan_Api:
             content_type = 'application/x-www-form-urlencoded'
         if payload:
             uri = uri + '?' + urlencode(payload, doseq=True)
-        query = request_type+'\n\n' + content_type + \
-            '\n' + self._today+'\n' + self.host + uri
-        hash_query = base64.b64encode(hmac.new(
-            self.SecretKey, query.encode(), hashlib.sha1).hexdigest().encode()).decode()
+        query = request_type+'\n\n' + content_type + '\n' + \
+            self._today+'\n' + self.host + uri
+        hash_query = base64.b64encode(hmac.new(self.SecretKey, query.encode(),
+                                               hashlib.sha1).hexdigest().encode()).decode()
         Auth_Heared = {
             'Date': self._today,
             'Accept': 'application/json',
@@ -78,12 +80,12 @@ class Megaplan_Api:
             {'Content-Type': 'application/x-www-form-urlencoded'}) if content_type == 'POST' else None
         return Auth_Heared
 
-    def get_query(self, uri_query, **kwargs):
-        head = self.query_hasher('GET', uri_query, kwargs)
+    def get_query(self, uri_query, payload=''):
+        head = self.query_hasher('GET', uri_query, payload)
         return requests.get(
             self.domain + uri_query,
             headers=head,
-            params=urlencode(kwargs, doseq=True)).json()['data']
+            params=urlencode(payload, doseq=True)).json()['data']
 
     def post_query(self, uri_query, payload):
         head = self.query_hasher('POST', uri_query, None)
