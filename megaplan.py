@@ -52,8 +52,8 @@ class Megaplan_Api:
     __slots__ = ['_HOST', '_HOST_full', '_today',
                  'AccessId', 'SecretKey', 'host', 'proto', 'domain']
 
-    def __init__(self, AccessId, SecretKey, host='control-mos.ru', proto='https://'):
-        self.host = 'control-mos.ru'  # Хост
+    def __init__(self, AccessId, SecretKey, host, proto='https://'):
+        self.host = host  # Хост
         self.proto = proto
         self.domain = self.proto + self.host  # протокол + хост
         self._today = formatdate(time.time())  # дата в стандарте RFC-2822
