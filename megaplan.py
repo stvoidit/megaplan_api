@@ -68,7 +68,7 @@ class Megaplan_Api:
         }
         return Auth_Heared
 
-    def get_query(self, uri_query, payload=None):
+    def get_query(self, uri_query, payload=''):
         head = self.query_hasher('GET', uri_query, payload)
         return requests.get(
             self.domain + uri_query,
