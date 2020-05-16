@@ -87,14 +87,10 @@ class Megaplan_Api:
             self.domain + uri_query,
             headers=head,
             params=urlencode(payload, doseq=True), timeout=60)
-        try:
-            resp_json = response.json()
-        except json.decoder.JSONDecodeError as jsde:
-            print(response.text)
-            raise jsde
+        resp_json = response.json()
         status = resp_json.get("status")
-        if status and status == "error":
-            raise Exception(status.get("message"))
+        if status and status.get("code") == "error":
+            raise ValueError(status["message"])
         return resp_json.get("data")
 
     def post_query(self, uri_query, payload):
