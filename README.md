@@ -13,7 +13,7 @@ https://dev.megaplan.ru/r1905/api/API_tasks.html#api-task-list
     api = Megaplan_Api(accessid, secretkey, my_host)
 
     query_url = '/BumsTaskApiV01/Task/list.api'
-    get_query = api.get_query(query_url, Folder='all', Status='any')
+    get_query = api.get_query(query_url, {"Folder":"all", "Status": "any"})
 
 ### Пример POST
 https://dev.megaplan.ru/r1905/api/API_deals.html#api-deals-save
