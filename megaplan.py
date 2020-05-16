@@ -1,4 +1,4 @@
-# v-2.05
+# v-2.36
 
 import requests
 import hashlib
@@ -8,6 +8,7 @@ from email.utils import formatdate
 from urllib.parse import urlencode
 import time
 import datetime
+import json
 
 
 class Megaplan_Auth:
@@ -26,8 +27,20 @@ class Megaplan_Auth:
         return hashlib.md5(password.encode()).hexdigest()
 
     def __get_otk(self):
-        return requests.post(self.domain + '/BumsCommonApiV01/User/createOneTimeKeyAuth.api', headers={
-            'Accept': 'application/json'}, data={'Login': self.login, 'Password': self.password}).json()['data']['OneTimeKey']
+        response = requests.post(self.domain + '/BumsCommonApiV01/User/createOneTimeKeyAuth.api', headers={
+            'Accept': 'application/json'}, data={'Login': self.login, 'Password': self.password})
+        try:
+            resp_json = response.json()
+        except json.decoder.JSONDecodeError as jsde:
+            print(response.text)
+            raise jsde
+        data = resp_json.get("data")
+        status = resp_json.get("status")
+        code = status.get("code")
+        if code == "error":
+            raise Exception(status.get("message"))
+        else:
+            return data
 
     def get_key(self):
         _authdata = requests.post(self.domain + '/BumsCommonApiV01/User/authorize.api', headers={
@@ -42,7 +55,7 @@ class Megaplan_Api:
                  'AccessId', 'SecretKey', 'host', 'proto', 'domain']
 
     def __init__(self, AccessId, SecretKey, host, proto='https://'):
-        self.host = host  # Хост
+        self.host = host
         self.proto = proto
         self.domain = self.proto + self.host
         self._today = formatdate(time.time())
@@ -70,11 +83,23 @@ class Megaplan_Api:
 
     def get_query(self, uri_query, payload=''):
         head = self.query_hasher('GET', uri_query, payload)
-        return requests.get(
+        response = requests.get(
             self.domain + uri_query,
             headers=head,
-            params=urlencode(payload, doseq=True)).json()
+            params=urlencode(payload, doseq=True), timeout=60)
+        try:
+            resp_json = response.json()
+        except json.decoder.JSONDecodeError as jsde:
+            print(response.text)
+            raise jsde
+        status = resp_json.get("status")
+        if status and status == "error":
+            raise Exception(status.get("message"))
+        return resp_json.get("data")
 
     def post_query(self, uri_query, payload):
         head = self.query_hasher('POST', uri_query, None)
         return requests.post(self.domain + uri_query, headers=head, data=payload).json()
+
+    def __repr__(self):
+        return f"<API [{self.domain}]>"
