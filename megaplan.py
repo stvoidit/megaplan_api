@@ -12,61 +12,60 @@ import json
 
 
 class Megaplan_Auth:
-    __slots__ = ['login', 'password', 'host',
-                 '__proto', 'accessid', 'secretkey', 'domain']
+    __slots__ = [
+        'login', 'password', 'host',
+        '__proto', 'accessid', 'secretkey', 'domain'
+    ]
 
-    def __init__(self, login, password, host, proto='https://'):
-        self.login = login
-        self.password = self.__password_crypt(password)
-        self.host = host
-        self.__proto = proto
-        self.domain = self.__proto + self.host
-        self.accessid, self.secretkey = self.get_key()
+    def __init__(self, host: str, proto='https://'):
+        self.host, self.__proto = host, proto
+        self.domain = f"{self.__proto}{self.host}"
 
-    def __password_crypt(self, password):
+    def __password_crypt(self, password: str) -> str:
         return hashlib.md5(password.encode()).hexdigest()
 
-    def __get_otk(self):
-        response = requests.post(self.domain + '/BumsCommonApiV01/User/createOneTimeKeyAuth.api', headers={
-            'Accept': 'application/json'}, data={'Login': self.login, 'Password': self.password})
-        try:
-            resp_json = response.json()
-        except json.decoder.JSONDecodeError as jsde:
-            print(response.text)
-            raise jsde
+    def __get_otk(self, login: str, encrupy_password: str):
+        response = requests.post(
+            url=f'{self.domain}/BumsCommonApiV01/User/createOneTimeKeyAuth.api',
+            headers={'Accept': 'application/json'},
+            data={'Login': login, 'Password': encrupy_password})
+        resp_json = response.json()
         data = resp_json.get("data")
         status = resp_json.get("status")
         code = status.get("code")
         if code == "error":
-            raise Exception(status.get("message"))
+            raise ValueError(status.get("message"))
         else:
             return data
 
-    def get_key(self):
-        _authdata = requests.post(self.domain + '/BumsCommonApiV01/User/authorize.api', headers={
-            'Accept': 'application/json'}, data={'Login': self.login, 'Password': self.password, 'OneTimeKey': self.__get_otk()}).json()['data']
-        _AccessId = _authdata['AccessId']
-        _SecretKey = _authdata['SecretKey'].encode()
+    def get_key(self, login: str, password: str):
+        encrupy_password = self.__password_crypt(password)
+        response = requests.post(
+            url=f'{self.domain}/BumsCommonApiV01/User/authorize.api',
+            headers={'Accept': 'application/json'},
+            data={'Login': login, 'Password': encrupy_password, 'OneTimeKey': self.__get_otk(login, encrupy_password)})
+        resp_json = response.json()
+        _AccessId = resp_json["data"]["AccessId"]
+        _SecretKey = resp_json["data"]["SecretKey"]
         return _AccessId, _SecretKey
 
 
 class Megaplan_Api:
-    __slots__ = ['_HOST', '_HOST_full', '_today',
-                 'AccessId', 'SecretKey', 'host', 'proto', 'domain']
+    __slots__ = [
+        '_today', 'AccessId', 'SecretKey',
+        'host', '__proto', 'domain', '_today'
+    ]
 
-    def __init__(self, AccessId, SecretKey, host, proto='https://'):
-        self.host = host
-        self.proto = proto
-        self.domain = self.proto + self.host
-        self._today = formatdate(time.time())
-        self.AccessId = AccessId
-        self.SecretKey = SecretKey
+    def __init__(self, AccessId: str, SecretKey: str, host: str, proto='https://'):
+        self.host, self.__proto = host, proto
+        self.domain = f"{self.__proto}{self.host}"
+        self.AccessId, self.SecretKey = AccessId, SecretKey.encode()
 
     def query_hasher(self, request_type, uri, payload=None):
+        self._today = formatdate(time.time())
         if payload:
-            uri = uri + '?' + urlencode(payload, doseq=True)
-        query = request_type+'\n\n' + 'application/x-www-form-urlencoded' + '\n' + \
-            self._today+'\n' + self.host + uri
+            uri = f"{uri}?{urlencode(payload, doseq=True)}"
+        query = f"{request_type}\n\napplication/x-www-form-urlencoded\n{self._today}\n{self.host}{uri}"
         hash_query = base64.b64encode(hmac.new(
             self.SecretKey,
             query.encode(),
@@ -75,27 +74,31 @@ class Megaplan_Api:
         Auth_Heared = {
             'Date': self._today,
             'Accept': 'application/json',
-            'X-Authorization': self.AccessId + ':' + hash_query,
+            'X-Authorization': f"{self.AccessId}:{hash_query}",
             'Content-Type': 'application/x-www-form-urlencoded',
             'accept-encoding': 'gzip, deflate, br'
         }
         return Auth_Heared
 
-    def get_query(self, uri_query, payload=''):
+    def get_query(self, uri_query: str, payload=None):
         head = self.query_hasher('GET', uri_query, payload)
         response = requests.get(
-            self.domain + uri_query,
+            url=f"{self.domain}{uri_query}",
             headers=head,
-            params=urlencode(payload, doseq=True), timeout=60)
+            params=urlencode(payload, doseq=True) if payload else None, timeout=60)
         resp_json = response.json()
         status = resp_json.get("status")
         if status and status.get("code") == "error":
             raise ValueError(status["message"])
         return resp_json.get("data")
 
-    def post_query(self, uri_query, payload):
+    def post_query(self, uri_query: str, payload: dict):
         head = self.query_hasher('POST', uri_query, None)
-        return requests.post(self.domain + uri_query, headers=head, data=payload).json()
+        response = requests.post(
+            url=f"{self.domain}{uri_query}",
+            headers=head,
+            data=payload)
+        return response.json()
 
     def __repr__(self):
         return f"<API [{self.domain}]>"

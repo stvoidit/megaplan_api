@@ -4,7 +4,7 @@
 
 Получение ключей / токенов для работы с АПИ
 
-    accessid, secretkey = Megaplan_Auth('login', 'password', 'host').get_key()
+    accessid, secretkey = Megaplan_Auth('host').get_key('login', 'password')
 
 ## Megaplan_Api
 
